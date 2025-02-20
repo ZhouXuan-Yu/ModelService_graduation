@@ -13,7 +13,7 @@ base64_image = encode_image("E://MyUser//GraduationDesign//Programe//ModelServic
 client = OpenAI(
     # 若没有配置环境变量，请用百炼API Key将下行替换为：api_key="sk-xxx"
     #api_key=os.getenv('DASHSCOPE_API_KEY'),
-    api_key="sk-8ecbfb7922bc425bafb971616f5a7674",
+    api_key="sk-DASHSCOPE_API_KEY",
     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
 )
 completion = client.chat.completions.create(
