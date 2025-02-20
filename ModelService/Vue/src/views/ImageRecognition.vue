@@ -93,6 +93,7 @@
           
           <div class="result-content" ref="resultContainer">
             <div class="result-image-container" 
+                 ref="containerRef"
                  :style="{ transform: `scale(${zoomLevel})` }"
                  @mousedown="startPan"
                  @mousemove="pan"
@@ -100,19 +101,33 @@
                  @mouseleave="endPan">
               <img 
                 v-if="imageUrl"
+                ref="imageRef"
                 :src="imageUrl"
                 alt="分析结果"
                 class="result-image"
-                :style="{ transform: `translate(${panX}px, ${panY}px)` }"
+                :style="{
+                  transform: `translate(${panX}px, ${panY}px)`,
+                  width: imageDisplaySize.width ? `${imageDisplaySize.width}px` : 'auto',
+                  height: imageDisplaySize.height ? `${imageDisplaySize.height}px` : 'auto',
+                  objectFit: 'contain'
+                }"
                 @load="onImageLoad"
               />
               <!-- 人物标注层 -->
-              <div class="annotations-layer">
+              <div class="annotations-layer"
+                   :style="{
+                     transform: `translate(${panX}px, ${panY}px)`,
+                     width: imageDisplaySize.width ? `${imageDisplaySize.width}px` : '100%',
+                     height: imageDisplaySize.height ? `${imageDisplaySize.height}px` : '100%'
+                   }">
                 <div v-for="(person, index) in analysisResult?.persons" 
                      :key="index"
                      class="person-annotation"
-                     :class="{ active: activePersonId === index }"
-                     :style="getAnnotationStyle(person.bbox)"
+                     :class="{ 
+                       active: activePersonId === index,
+                       'has-data': person.gender !== 'unknown' || person.age > 0 
+                     }"
+                     :style="calculateBoxStyle(person.bbox)"
                      @click="handlePersonClick(index)">
                   <div class="annotation-label">
                     {{ index + 1 }}
@@ -227,7 +242,15 @@ const analysisProgress = ref(0)
 const progressInterval = ref(null)
 
 const progressFormat = (percentage) => {
-  return `${percentage}% 处理中...`
+  if (percentage < 30) {
+    return `${percentage}% 正在初始化分析...`
+  } else if (percentage < 60) {
+    return `${percentage}% 正在处理图像...`
+  } else if (percentage < 90) {
+    return `${percentage}% 正在生成结果...`
+  } else {
+    return `${percentage}% 即将完成...`
+  }
 }
 
 // 添加 assistantRef
@@ -237,6 +260,48 @@ const assistantRef = ref(null)
 const chatInput = ref('')
 const chatMessages = ref([])
 const isProcessing = ref(false)
+
+// 添加图片尺寸状态
+const imageSize = ref({ width: 0, height: 0 })
+const containerSize = ref({ width: 0, height: 0 })
+
+// 添加图片缩放比例
+const imageScale = ref(1)
+
+// 添加图片显示尺寸状态
+const imageDisplaySize = ref({ width: 0, height: 0 })
+
+// 在 script setup 中添加新的 ref
+const imageRef = ref(null)
+const containerRef = ref(null)
+
+// 添加防抖函数
+const debounce = (fn, delay) => {
+  let timer = null
+  return function (...args) {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => {
+      fn.apply(this, args)
+    }, delay)
+  }
+}
+
+// 使用防抖优化更新
+const debouncedUpdateBoxes = debounce(() => {
+  if (analysisResult.value) {
+    analysisResult.value = { ...analysisResult.value }
+  }
+}, 16) // 约60fps的更新频率
+
+// 修改 ResizeObserver 回调
+const resizeObserver = new ResizeObserver(() => {
+  if (containerRef.value && imageRef.value) {
+    nextTick(() => {
+      calculateImageDisplaySize()
+      debouncedUpdateBoxes()
+    })
+  }
+})
 
 // 图片处理相关
 const beforeUpload = (file) => {
@@ -328,6 +393,9 @@ const resetZoom = () => {
 }
 
 const startPan = (e) => {
+  // 只有在没有标注框被点击的情况下才允许平移
+  if (e.target.classList.contains('person-annotation')) return
+  
   isPanning.value = true
   lastX.value = e.clientX
   lastY.value = e.clientY
@@ -339,8 +407,12 @@ const pan = (e) => {
   const deltaX = e.clientX - lastX.value
   const deltaY = e.clientY - lastY.value
   
-  panX.value += deltaX
-  panY.value += deltaY
+  // 限制平移范围
+  const maxPanX = imageDisplaySize.value.width * (zoomLevel.value - 1) / 2
+  const maxPanY = imageDisplaySize.value.height * (zoomLevel.value - 1) / 2
+  
+  panX.value = Math.max(-maxPanX, Math.min(maxPanX, panX.value + deltaX))
+  panY.value = Math.max(-maxPanY, Math.min(maxPanY, panY.value + deltaY))
   
   lastX.value = e.clientX
   lastY.value = e.clientY
@@ -351,14 +423,80 @@ const endPan = () => {
 }
 
 // 人物标注相关
-const getAnnotationStyle = (bbox) => {
-  if (!bbox) return {}
-  const [x, y, width, height] = bbox
-  return {
-    left: `${x}%`,
-    top: `${y}%`,
-    width: `${width}%`,
-    height: `${height}%`
+const calculateBoxStyle = (bbox) => {
+  if (!bbox || !imageRef.value || !containerRef.value) {
+    console.warn('缺少计算标记框所需的参数')
+    return {}
+  }
+
+  try {
+    const [x1, y1, x2, y2] = bbox
+    const img = imageRef.value
+    const container = containerRef.value
+    
+    // 获取图片的原始尺寸
+    const imgNaturalWidth = img.naturalWidth
+    const imgNaturalHeight = img.naturalHeight
+    
+    // 获取容器的实际尺寸
+    const containerRect = container.getBoundingClientRect()
+    const containerWidth = containerRect.width
+    const containerHeight = containerRect.height
+    
+    // 计算图片在容器中的实际显示尺寸
+    const imageRatio = imgNaturalWidth / imgNaturalHeight
+    const containerRatio = containerWidth / containerHeight
+    
+    let displayWidth, displayHeight, offsetX = 0, offsetY = 0
+    
+    if (imageRatio > containerRatio) {
+      // 图片较宽，以容器宽度为准
+      displayWidth = containerWidth
+      displayHeight = containerWidth / imageRatio
+      offsetY = (containerHeight - displayHeight) / 2
+    } else {
+      // 图片较高，以容器高度为准
+      displayHeight = containerHeight
+      displayWidth = containerHeight * imageRatio
+      offsetX = (containerWidth - displayWidth) / 2
+    }
+    
+    // 计算缩放比例
+    const scaleX = displayWidth / imgNaturalWidth
+    const scaleY = displayHeight / imgNaturalHeight
+    
+    // 计算边界框在实际显示中的位置和尺寸
+    const boxLeft = x1 * scaleX + offsetX
+    const boxTop = y1 * scaleY + offsetY
+    const boxWidth = (x2 - x1) * scaleX
+    const boxHeight = (y2 - y1) * scaleY
+    
+    // 验证计算结果
+    if ([boxLeft, boxTop, boxWidth, boxHeight].some(val => isNaN(val))) {
+      console.error('标记框计算结果无效:', { boxLeft, boxTop, boxWidth, boxHeight })
+      return {}
+    }
+    
+    // 返回标记框样式
+    return {
+      position: 'absolute',
+      left: `${boxLeft}px`,
+      top: `${boxTop}px`,
+      width: `${boxWidth}px`,
+      height: `${boxHeight}px`,
+      transform: 'none',
+      backgroundColor: 'rgba(64, 158, 255, 0.1)',
+      backdropFilter: 'blur(2px)',
+      border: '2px solid var(--el-color-primary)',
+      borderRadius: '8px',
+      zIndex: '2',
+      pointerEvents: 'auto',
+      cursor: 'pointer',
+      transition: 'all 0.3s ease'
+    }
+  } catch (error) {
+    console.error('计算标记框样式出错:', error)
+    return {}
   }
 }
 
@@ -621,19 +759,180 @@ const getImageUrl = (url) => {
   return url.startsWith('/') ? `http://localhost:8000${url}` : url
 }
 
-// 图片加载完成处理
-const onImageLoad = () => {
-  console.log('Result image loaded')
-  // 重置缩放和平移
-  resetZoom()
+// 图片加载完成后的处理
+const onImageLoad = async () => {
+  try {
+    await nextTick()
+    if (!imageRef.value || !containerRef.value) {
+      console.warn('图片或容器引用未找到')
+      return
+    }
+    
+    const img = imageRef.value
+    const container = containerRef.value
+    
+    // 禁止图片拖动
+    img.draggable = false
+    
+    // 获取容器尺寸
+    const containerRect = container.getBoundingClientRect()
+    
+    // 保存图片原始尺寸
+    imageSize.value = {
+      width: img.naturalWidth,
+      height: img.naturalHeight
+    }
+    
+    // 保存容器尺寸
+    containerSize.value = {
+      width: containerRect.width,
+      height: containerRect.height
+    }
+    
+    // 计算图片显示尺寸
+    const imageRatio = imageSize.value.width / imageSize.value.height
+    const containerRatio = containerSize.value.width / containerSize.value.height
+    
+    let displayWidth, displayHeight
+    
+    if (imageRatio > containerRatio) {
+      displayWidth = containerSize.value.width
+      displayHeight = displayWidth / imageRatio
+    } else {
+      displayHeight = containerSize.value.height
+      displayWidth = displayHeight * imageRatio
+    }
+    
+    // 更新图片显示尺寸
+    imageDisplaySize.value = {
+      width: displayWidth,
+      height: displayHeight
+    }
+    
+    // 计算缩放比例
+    imageScale.value = displayWidth / imageSize.value.width
+    
+    // 强制更新标记框位置
+    if (analysisResult.value) {
+      nextTick(() => {
+        analysisResult.value = { ...analysisResult.value }
+      })
+    }
+    
+    console.log('图片加载完成:', {
+      naturalSize: imageSize.value,
+      containerSize: containerSize.value,
+      displaySize: imageDisplaySize.value,
+      scale: imageScale.value
+    })
+  } catch (error) {
+    console.error('图片加载处理出错:', error)
+    ElMessage.error('图片加载失败，请重试')
+  }
 }
 
+// 监听窗口大小变化
+const handleResize = debounce(() => {
+  if (imageRef.value && containerRef.value) {
+    onImageLoad()
+  }
+}, 200)
+
+// 组件挂载时添加监听器
+onMounted(() => {
+  window.addEventListener('resize', handleResize)
+})
+
+// 组件卸载时移除监听器
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+})
+
+// 添加图片显示尺寸计算函数
+const calculateImageDisplaySize = () => {
+  if (!imageSize.value.width || !containerSize.value.width) return
+  
+  const containerRatio = containerSize.value.width / containerSize.value.height
+  const imageRatio = imageSize.value.width / imageSize.value.height
+  
+  let displayWidth, displayHeight
+  
+  if (imageRatio > containerRatio) {
+    // 图片较宽，以容器宽度为准
+    displayWidth = containerSize.value.width
+    displayHeight = displayWidth / imageRatio
+  } else {
+    // 图片较高，以容器高度为准
+    displayHeight = containerSize.value.height
+    displayHeight = Math.min(displayHeight, containerSize.value.height * 0.9) // 留出一些边距
+    displayWidth = displayHeight * imageRatio
+  }
+  
+  imageDisplaySize.value = {
+    width: displayWidth,
+    height: displayHeight
+  }
+  
+  // 计算缩放比例
+  imageScale.value = displayWidth / imageSize.value.width
+  
+  console.log('图片显示尺寸计算结果:', {
+    containerSize: containerSize.value,
+    imageSize: imageSize.value,
+    displaySize: imageDisplaySize.value,
+    scale: imageScale.value
+  })
+}
+
+// 监听缩放级别变化
+watch(zoomLevel, () => {
+  nextTick(() => {
+    // 强制更新标记框位置
+    analysisResult.value = { ...analysisResult.value }
+  })
+})
+
 const startProgressAnimation = () => {
-  // Implementation of startProgressAnimation
+  analysisProgress.value = 0
+  let baseProgress = 0
+  let speed = 1
+
+  // 清除可能存在的旧定时器
+  if (progressInterval.value) {
+    clearInterval(progressInterval.value)
+  }
+
+  progressInterval.value = setInterval(() => {
+    if (baseProgress < 90) { // 只增长到90%，留出实际完成的空间
+      // 动态调整速度，进度越大，速度越慢
+      if (baseProgress < 30) {
+        speed = 2
+      } else if (baseProgress < 60) {
+        speed = 1
+      } else {
+        speed = 0.5
+      }
+
+      baseProgress += speed
+      analysisProgress.value = Math.min(90, baseProgress)
+    }
+  }, 100)
 }
 
 const stopProgressAnimation = () => {
-  // Implementation of stopProgressAnimation
+  if (progressInterval.value) {
+    clearInterval(progressInterval.value)
+    progressInterval.value = null
+  }
+  
+  // 平滑过渡到100%
+  analysisProgress.value = 90
+  setTimeout(() => {
+    analysisProgress.value = 95
+  }, 100)
+  setTimeout(() => {
+    analysisProgress.value = 100
+  }, 200)
 }
 
 // 处理聊天提交
@@ -795,86 +1094,96 @@ watch(chatMessages, () => {
 
 .result-content {
   display: flex;
+  width: 100%;
+  height: 100%;
   gap: 20px;
+  position: relative;
+  overflow: hidden;
+  padding: 0 20px;
 }
 
 .result-image-container {
-  flex: 1;
-  max-width: 600px;
+  flex: 0 0 65%;
   position: relative;
+  height: 600px;
   overflow: hidden;
-  transition: transform 0.2s ease;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.1);
+  user-select: none;
+  margin-right: 20px;
 }
 
 .result-image {
-  width: 100%;
-  height: auto;
-  border-radius: 4px;
-  transition: transform 0.2s ease;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  margin-left: 20px;
 }
 
 .annotations-layer {
   position: absolute;
   top: 0;
-  left: 0;
-  width: 100%;
+  left: 20px;
+  width: calc(100% - 20px);
   height: 100%;
   pointer-events: none;
+  z-index: 10;
 }
 
 .person-annotation {
   position: absolute;
   border: 2px solid var(--el-color-primary);
-  border-radius: 4px;
-  cursor: pointer;
+  border-radius: 8px;
   pointer-events: auto;
+  cursor: pointer;
   transition: all 0.3s ease;
-}
-
-.person-annotation.active {
-  border-color: var(--el-color-success);
-  box-shadow: 0 0 10px rgba(0, 200, 0, 0.3);
-  animation: highlight 1s ease-in-out infinite;
-}
-
-@keyframes highlight {
-  0% {
-    box-shadow: 0 0 10px rgba(0, 200, 0, 0.3);
-  }
-  50% {
-    box-shadow: 0 0 20px rgba(0, 200, 0, 0.5);
-  }
-  100% {
-    box-shadow: 0 0 10px rgba(0, 200, 0, 0.3);
-  }
+  z-index: 11;
+  background-color: rgba(64, 158, 255, 0.1);
+  backdrop-filter: blur(2px);
 }
 
 .annotation-label {
   position: absolute;
-  top: -20px;
-  left: -2px;
+  top: -30px;
+  left: 50%;
+  transform: translateX(-50%);
   background-color: var(--el-color-primary);
   color: white;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: bold;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  z-index: 12;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .result-details {
-  flex: 1;
-  min-width: 300px;
+  flex: 0 0 35%;
+  min-width: 400px;
+  max-width: 500px;
+  overflow-y: auto;
+  padding: 20px;
+  background: var(--el-bg-color-overlay);
+  border-left: 1px solid var(--el-border-color-light);
+  z-index: 20;
+  position: relative;
 }
 
 .person-info {
-  padding: 10px;
+  padding: 15px;
+  margin-bottom: 15px;
 }
 
 :deep(.el-descriptions) {
-  margin-bottom: 10px;
+  margin-bottom: 15px;
 }
 
-:deep(.el-tag) {
-  margin-left: 8px;
+:deep(.el-descriptions__cell) {
+  padding: 12px 15px;
 }
 
 /* 添加分隔线样式 */
@@ -1052,5 +1361,34 @@ watch(chatMessages, () => {
 .has-results {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+}
+
+/* 修改描述列表的样式 */
+:deep(.el-descriptions__cell.el-descriptions__label) {
+  background-color: #141414 !important; /* 使用深色背景 */
+  color: rgba(255, 255, 255, 0.85) !important; /* 使用浅色文字 */
+}
+
+:deep(.el-descriptions__cell.el-descriptions__content) {
+  background-color: #141414 !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* 确保边框样式正确 */
+:deep(.el-descriptions) {
+  --el-descriptions-item-bordered-label-background: #141414;
+}
+
+/* 标签和内容的边框颜色 */
+:deep(.el-descriptions--bordered .el-descriptions__cell) {
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 确保颜色标签在深色背景下可见 */
+.color-tag {
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-right: 8px;
+  display: inline-block;
 }
 </style> 
