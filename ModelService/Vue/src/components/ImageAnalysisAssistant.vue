@@ -1,86 +1,94 @@
 <template>
   <div class="image-analysis-assistant">
-    <div class="assistant-header">
-      <h3>图片分析助手</h3>
-      <div class="header-actions">
-        <el-dropdown @command="handleHistorySelect">
-          <el-button type="text">
-            历史记录
-            <el-icon class="el-icon--right"><arrow-down /></el-icon>
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item 
-                v-for="item in analysisHistoryStore.analysisSummaries" 
-                :key="item.id"
-                :command="item.id"
-                :class="{ 'active': item.isActive }"
-              >
-                {{ formatTime(item.timestamp) }} ({{ item.numFaces }}人)
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-        <el-button type="text" @click="clearHistory">
-          <el-icon><Delete /></el-icon>
-          清空历史
-        </el-button>
-      </div>
-    </div>
+    <div 
+      class="resizer" 
+      :class="{ resizing: isResizing }"
+      @mousedown="startResize"
+    ></div>
 
-    <div class="chat-content" ref="chatContent">
-      <div v-for="(msg, index) in chatHistory" 
-           :key="index" 
-           :class="['message', msg.role]">
-        <div class="message-content markdown-body" v-html="formatMessage(msg)"></div>
-        <div v-if="msg.matches?.length" class="matches">
-          <div v-for="match in msg.matches" 
-               :key="match.id"
-               class="match-item"
-               @click="highlightPerson(match.id)">
-            <div class="match-info">
-              <span>性别: {{ match.gender }}</span>
-              <span>年龄: {{ match.age }}</span>
-            </div>
-            <div class="match-colors">
-              <span class="color-tag" :style="getColorStyle(match.upper_color)">
-                上衣: {{ translateColor(match.upper_color) }}
-              </span>
-              <span class="color-tag" :style="getColorStyle(match.lower_color)">
-                下装: {{ translateColor(match.lower_color) }}
-              </span>
+    <div class="assistant-content" :style="{ width: assistantWidth + 'px' }">
+      <div class="assistant-header">
+        <h3>图片分析助手</h3>
+        <div class="header-actions">
+          <el-dropdown @command="handleHistorySelect">
+            <el-button type="text">
+              历史记录
+              <el-icon class="el-icon--right"><arrow-down /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item 
+                  v-for="item in analysisHistoryStore.analysisSummaries" 
+                  :key="item.id"
+                  :command="item.id"
+                  :class="{ 'active': item.isActive }"
+                >
+                  {{ formatTime(item.timestamp) }} ({{ item.numFaces }}人)
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          <el-button type="text" @click="clearHistory">
+            <el-icon><Delete /></el-icon>
+            清空历史
+          </el-button>
+        </div>
+      </div>
+
+      <div class="chat-content" ref="chatContent">
+        <div v-for="(msg, index) in chatHistory" 
+             :key="index" 
+             :class="['message', msg.role]">
+          <div class="message-content markdown-body" v-html="formatMessage(msg)"></div>
+          <div v-if="msg.matches?.length" class="matches">
+            <div v-for="match in msg.matches" 
+                 :key="match.id"
+                 class="match-item"
+                 @click="highlightPerson(match.id)">
+              <div class="match-info">
+                <span>性别: {{ match.gender }}</span>
+                <span>年龄: {{ match.age }}</span>
+              </div>
+              <div class="match-colors">
+                <span class="color-tag" :style="getColorStyle(match.upper_color)">
+                  上衣: {{ translateColor(match.upper_color) }}
+                </span>
+                <span class="color-tag" :style="getColorStyle(match.lower_color)">
+                  下装: {{ translateColor(match.lower_color) }}
+                </span>
+              </div>
             </div>
           </div>
+          <div class="message-time">{{ formatTime(msg.timestamp) }}</div>
         </div>
-        <div class="message-time">{{ formatTime(msg.timestamp) }}</div>
-      </div>
-      <div v-if="loading" class="message assistant thinking">
-        <div class="thinking-dots">
-          <span></span>
-          <span></span>
-          <span></span>
+        <div v-if="loading" class="message assistant thinking">
+          <div class="thinking-dots">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="input-area">
-      <el-input
-        v-model="inputMessage"
-        :placeholder="inputPlaceholder"
-        @keyup.enter="sendMessage"
-        :disabled="loading"
-        clearable
-      >
-        <template #append>
-          <el-button @click="sendMessage" :loading="loading">发送</el-button>
-        </template>
-      </el-input>
+      <div class="input-area">
+        <el-input
+          v-model="inputMessage"
+          :placeholder="inputPlaceholder"
+          @keyup.enter="sendMessage"
+          :disabled="loading"
+          clearable
+        >
+          <template #append>
+            <el-button @click="sendMessage" :loading="loading">发送</el-button>
+          </template>
+        </el-input>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 import { Delete, ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAnalysisHistoryStore } from '@/stores/analysisHistory'
@@ -115,6 +123,12 @@ const chatHistory = ref([
 
 const loading = ref(false)
 const isProcessing = ref(false)
+
+// 添加拖动相关的状态和方法
+const isResizing = ref(false)
+const assistantWidth = ref(400) // 默认宽度
+const minWidth = 300 // 最小宽度
+const maxWidth = 600 // 最大宽度
 
 // Methods
 const sendMessage = async () => {
@@ -298,151 +312,185 @@ ${formattedResult.persons.map((person, index) => `
 defineExpose({
   notifyAnalysisComplete
 })
+
+// 添加拖动相关的方法
+const startResize = (e) => {
+  isResizing.value = true
+  document.addEventListener('mousemove', handleResize)
+  document.addEventListener('mouseup', stopResize)
+  document.body.classList.add('resizing')
+}
+
+const handleResize = (e) => {
+  if (!isResizing.value) return
+  
+  // 获取容器的右边界位置
+  const containerRect = document.querySelector('.image-analysis-assistant').getBoundingClientRect()
+  const containerRight = containerRect.right
+  
+  // 计算新的宽度
+  const newWidth = containerRight - e.clientX
+  
+  // 限制宽度在最小值和最大值之间
+  assistantWidth.value = Math.min(Math.max(newWidth, minWidth), maxWidth)
+}
+
+const stopResize = () => {
+  isResizing.value = false
+  document.removeEventListener('mousemove', handleResize)
+  document.removeEventListener('mouseup', stopResize)
+  document.body.classList.remove('resizing')
+}
+
+// 组件卸载时清理事件监听
+onUnmounted(() => {
+  document.removeEventListener('mousemove', handleResize)
+  document.removeEventListener('mouseup', stopResize)
+})
 </script>
 
 <style scoped>
 .image-analysis-assistant {
   height: 100%;
   display: flex;
+  position: relative;
+  background-color: rgba(13, 17, 23, 0.95);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 0 30px rgba(0, 255, 157, 0.1);
+}
+
+.resizer {
+  width: 4px;
+  background: linear-gradient(180deg, rgba(0, 255, 157, 0.1), rgba(0, 214, 255, 0.1));
+  cursor: col-resize;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -2px;
+  z-index: 100;
+  transition: all 0.3s ease;
+}
+
+.resizer:hover,
+.resizer.resizing {
+  background: linear-gradient(180deg, rgba(0, 255, 157, 0.8), rgba(0, 214, 255, 0.8));
+  box-shadow: 0 0 15px rgba(0, 255, 157, 0.5);
+  width: 6px;
+}
+
+.assistant-content {
+  flex: 1;
+  display: flex;
   flex-direction: column;
-  background-color: var(--el-bg-color);
-  color: var(--el-text-color-primary);
+  min-width: 300px;
+  max-width: 600px;
+  height: 100%;
+  background: rgba(20, 25, 30, 0.7);
+  border-left: 1px solid rgba(0, 255, 157, 0.1);
+  position: relative;
+  backdrop-filter: blur(10px);
 }
 
 .assistant-header {
-  padding: 12px 16px;
+  padding: 16px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #141414;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.header-actions {
-  display: flex;
-  gap: 12px;
+  background: linear-gradient(90deg, rgba(13, 17, 23, 0.95), rgba(20, 25, 30, 0.95));
+  border-bottom: 1px solid rgba(0, 255, 157, 0.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 }
 
 .assistant-header h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 500;
+  color: #ffffff;
+  text-shadow: 0 0 10px rgba(0, 255, 157, 0.5);
+  letter-spacing: 0.5px;
 }
 
 .chat-content {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
-  background-color: var(--el-bg-color);
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(13, 17, 23, 0.7), rgba(20, 25, 30, 0.7));
 }
 
 .message {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
   max-width: 85%;
   opacity: 1;
   transform: translateY(0);
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 12px;
+  overflow: hidden;
 }
 
 .message.assistant {
   margin-right: auto;
-  animation: slideIn 0.3s ease;
+  background: rgba(0, 255, 157, 0.05);
+  border: 1px solid rgba(0, 255, 157, 0.1);
+  box-shadow: 0 4px 15px rgba(0, 255, 157, 0.1);
+  animation: slideInLeft 0.3s ease;
 }
 
 .message.user {
   margin-left: auto;
-  animation: slideIn 0.3s ease;
+  background: rgba(0, 214, 255, 0.05);
+  border: 1px solid rgba(0, 214, 255, 0.1);
+  box-shadow: 0 4px 15px rgba(0, 214, 255, 0.1);
+  animation: slideInRight 0.3s ease;
 }
 
 .message-content {
-  padding: 12px;
-  border-radius: 8px;
-  background-color: rgba(255, 255, 255, 0.05);
-  line-height: 1.5;
-  word-break: break-word;
-}
-
-.message.user .message-content {
-  background-color: var(--el-color-primary-light-9);
-  color: var(--el-color-primary-dark-2);
-}
-
-.message-time {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  margin-top: 4px;
-}
-
-.matches {
-  margin-top: 12px;
-}
-
-.match-item {
-  padding: 12px;
-  margin-bottom: 8px;
-  border-radius: 6px;
-  background-color: rgba(255, 255, 255, 0.03);
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.match-item:hover {
-  background-color: rgba(255, 255, 255, 0.08);
-}
-
-.match-info {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 8px;
-}
-
-.match-colors {
-  display: flex;
-  gap: 8px;
-}
-
-.color-tag {
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  color: #fff;
-  text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+  padding: 16px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .input-area {
-  padding: 16px;
-  background-color: rgba(255, 255, 255, 0.02);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 20px;
+  background: linear-gradient(0deg, rgba(13, 17, 23, 0.95), rgba(20, 25, 30, 0.7));
+  border-top: 1px solid rgba(0, 255, 157, 0.1);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
 }
 
 :deep(.el-input__wrapper) {
-  background-color: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(0, 255, 157, 0.1);
+  box-shadow: none;
+  transition: all 0.3s ease;
+}
+
+:deep(.el-input__wrapper:hover) {
+  border-color: rgba(0, 255, 157, 0.3);
+  box-shadow: 0 0 15px rgba(0, 255, 157, 0.1);
 }
 
 :deep(.el-input__inner) {
-  color: var(--el-text-color-primary);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
 }
 
-:deep(.el-input__inner::placeholder) {
-  color: var(--el-text-color-secondary);
-}
-
-:deep(.el-dropdown-menu__item.active) {
-  color: var(--el-color-primary);
+:deep(.el-button) {
+  background: linear-gradient(45deg, #00ff9d, #00d6ff);
+  border: none;
+  color: #0d1117;
   font-weight: 500;
+  transition: all 0.3s ease;
 }
 
-/* 添加思考中的动画样式 */
-.thinking {
-  padding: 12px;
-  margin-bottom: 16px;
-  max-width: 100px;
+:deep(.el-button:hover) {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0, 255, 157, 0.3);
 }
 
 .thinking-dots {
   display: flex;
-  gap: 4px;
-  align-items: center;
+  gap: 6px;
+  padding: 12px;
   justify-content: center;
 }
 
@@ -450,9 +498,9 @@ defineExpose({
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: var(--el-color-primary);
-  animation: thinking 1.4s infinite;
-  opacity: 0.4;
+  background: linear-gradient(45deg, #00ff9d, #00d6ff);
+  animation: pulse 1.4s infinite;
+  opacity: 0.6;
 }
 
 .thinking-dots span:nth-child(2) {
@@ -463,127 +511,131 @@ defineExpose({
   animation-delay: 0.4s;
 }
 
-@keyframes thinking {
+@keyframes pulse {
   0%, 100% {
-    transform: translateY(0);
-    opacity: 0.4;
+    transform: scale(0.8);
+    opacity: 0.6;
   }
   50% {
-    transform: translateY(-4px);
+    transform: scale(1.2);
     opacity: 1;
   }
 }
 
-/* 优化消息样式 */
-@keyframes slideIn {
+@keyframes slideInLeft {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateX(-20px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateX(0);
   }
 }
 
-/* 移除加载遮罩相关样式 */
-:deep(.el-loading-mask) {
-  display: none !important;
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
-/* 添加 Markdown 样式 */
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #00ff9d, #00d6ff);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #00ff9d, #00d6ff);
+}
+
+/* Markdown 样式优化 */
 .markdown-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  color: rgba(255, 255, 255, 0.9);
   line-height: 1.6;
 }
 
-.markdown-body :deep(h1) {
-  font-size: 2em;
-  margin: 0.67em 0;
-  border-bottom: 1px solid var(--el-border-color-light);
-  padding-bottom: 0.3em;
-}
-
-.markdown-body :deep(h2) {
-  font-size: 1.5em;
-  margin: 0.83em 0;
-  border-bottom: 1px solid var(--el-border-color-light);
-  padding-bottom: 0.3em;
-}
-
+.markdown-body :deep(h1),
+.markdown-body :deep(h2),
 .markdown-body :deep(h3) {
-  font-size: 1.17em;
-  margin: 1em 0;
-}
-
-.markdown-body :deep(ul), .markdown-body :deep(ol) {
-  padding-left: 2em;
-  margin: 1em 0;
-}
-
-.markdown-body :deep(li) {
-  margin: 0.5em 0;
+  color: #00ff9d;
+  text-shadow: 0 0 10px rgba(0, 255, 157, 0.3);
+  border-bottom: 1px solid rgba(0, 255, 157, 0.1);
 }
 
 .markdown-body :deep(code) {
-  background-color: var(--el-bg-color-page);
-  padding: 0.2em 0.4em;
-  border-radius: 3px;
-  font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
-  font-size: 85%;
+  background: rgba(0, 255, 157, 0.1);
+  color: #00ff9d;
+  border-radius: 4px;
+  padding: 2px 6px;
 }
 
 .markdown-body :deep(pre) {
-  background-color: var(--el-bg-color-page);
-  padding: 1em;
-  border-radius: 6px;
-  overflow-x: auto;
+  background: rgba(13, 17, 23, 0.8);
+  border: 1px solid rgba(0, 255, 157, 0.1);
+  border-radius: 8px;
 }
 
 .markdown-body :deep(blockquote) {
+  border-left: 4px solid #00ff9d;
+  background: rgba(0, 255, 157, 0.05);
   margin: 1em 0;
-  padding: 0 1em;
-  color: var(--el-text-color-secondary);
-  border-left: 0.25em solid var(--el-border-color);
+  padding: 1em;
+  border-radius: 4px;
 }
 
-.markdown-body :deep(table) {
-  border-collapse: collapse;
-  width: 100%;
-  margin: 1em 0;
+/* 匹配结果样式 */
+.matches {
+  margin-top: 12px;
 }
 
-.markdown-body :deep(th), .markdown-body :deep(td) {
-  border: 1px solid var(--el-border-color);
-  padding: 6px 13px;
+.match-item {
+  background: rgba(0, 255, 157, 0.05);
+  border: 1px solid rgba(0, 255, 157, 0.1);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
 }
 
-.markdown-body :deep(th) {
-  background-color: var(--el-bg-color-page);
+.match-item:hover {
+  background: rgba(0, 255, 157, 0.1);
+  transform: translateX(4px);
+  box-shadow: 0 4px 15px rgba(0, 255, 157, 0.2);
 }
 
-.markdown-body :deep(img) {
-  max-width: 100%;
-  height: auto;
+.match-info {
+  display: flex;
+  gap: 16px;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 8px;
 }
 
-.markdown-body :deep(p) {
-  margin: 1em 0;
+.match-colors {
+  display: flex;
+  gap: 8px;
 }
 
-.markdown-body :deep(hr) {
-  height: 0.25em;
-  border: 0;
-  background-color: var(--el-border-color);
-  margin: 24px 0;
-}
-
-.message.assistant .message-content {
-  background-color: var(--el-bg-color-overlay);
-  border: 1px solid var(--el-border-color-light);
-}
-
-.message.user .message-content {
-  background-color: var(--el-color-primary-light-9);
+.color-tag {
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #ffffff;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+  background: linear-gradient(45deg, rgba(0, 255, 157, 0.3), rgba(0, 214, 255, 0.3));
 }
 </style>
