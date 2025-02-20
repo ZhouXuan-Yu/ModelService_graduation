@@ -1,0 +1,105 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no, width=device-width">
+    <title>地点关键字 + 驾车路线规划</title>
+    <style type="text/css">
+    html, body, #container {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    #panel {
+        position: fixed;
+        background-color: white;
+        max-height: 90%;
+        overflow-y: auto;
+        top: 10px;
+        right: 10px;
+        width: 280px;
+    }
+    #search-box {
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        z-index: 100;
+        background-color: white;
+        padding: 10px;
+        border-radius: 4px;
+        box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    }
+    .input-item {
+        margin-bottom: 10px;
+    }
+    .input-item input {
+        width: 200px;
+        padding: 5px;
+    }
+    </style>
+    <script type="text/javascript">
+        window._AMapSecurityConfig = {
+            securityJsCode: 'b121438987a27c89fcf2b879832088a9',   // 需要替换为您的安全密钥
+        }
+    </script>
+    <script type="text/javascript" src="https://webapi.amap.com/maps?v=2.0&key=5c98219ee72ff8b122e46b8167333eb9"></script>
+</head>
+<body>
+<div id="search-box">
+    <div class="input-item">
+        <input id="startAddress" type="text" placeholder="起点" value="北京市地震局">
+    </div>
+    <div class="input-item">
+        <input id="endAddress" type="text" placeholder="终点" value="亦庄文化园">
+    </div>
+    <button onclick="searchRoute()">搜索路线</button>
+</div>
+<div id="container"></div>
+<div id="panel"></div>
+<script type="text/javascript">
+    //基本地图加载
+    var map = new AMap.Map("container", {
+        resizeEnable: true,
+        center: [116.397428, 39.90923],//地图中心点
+        zoom: 13 //地图显示的缩放级别
+    });
+
+    // 异步加载插件
+    AMap.plugin(['AMap.Driving'], function() {
+        //构造路线导航类
+        var driving = new AMap.Driving({
+            map: map,
+            panel: "panel"
+        }); 
+
+        // 根据起终点名称规划驾车导航路线
+        window.searchRoute = function() {
+            var startAddress = document.getElementById('startAddress').value;
+            var endAddress = document.getElementById('endAddress').value;
+
+            driving.search([
+                {keyword: startAddress, city:'北京'},
+                {keyword: endAddress, city:'北京'}
+            ], function(status, result) {
+                if (status === 'complete') {
+                    console.log('绘制驾车路线完成');
+                } else {
+                    console.error('获取驾车数据失败：' + result);
+                }
+            });
+        }
+
+        // 初始加载一条默认路线
+        searchRoute();
+    });
+
+    // 添加地图控件
+    AMap.plugin(['AMap.ToolBar', 'AMap.Scale'], function() {
+        map.addControl(new AMap.ToolBar());
+        map.addControl(new AMap.Scale());
+    });
+</script>
+</body>
+</html>

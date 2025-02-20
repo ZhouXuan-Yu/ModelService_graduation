@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI 聊天助手</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+        
+        .chat-container {
+            max-width: 900px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .model-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #modelSelect {
+            padding: 8px 12px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            font-size: 14px;
+            min-width: 150px;
+        }
+
+        .chat-history {
+            height: 500px;
+            overflow-y: auto;
+            padding: 10px;
+            border: 1px solid #eee;
+            border-radius: 5px;
+            background-color: #fafafa;
+            margin-bottom: 20px;
+        }
+
+        .message {
+            margin: 10px 0;
+            padding: 12px 15px;
+            border-radius: 10px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+
+        .user-message {
+            background-color: #e3f2fd;
+            margin-left: auto;
+            color: #1565c0;
+        }
+
+        .assistant-message {
+            background-color: #f5f5f5;
+            margin-right: auto;
+            color: #333;
+        }
+
+        .system-message {
+            background-color: #ffebee;
+            text-align: center;
+            margin: 10px auto;
+            color: #c62828;
+            font-size: 0.9em;
+        }
+
+        .input-container {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #eee;
+        }
+
+        #messageInput {
+            flex-grow: 1;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            resize: vertical;
+            min-height: 60px;
+            font-size: 14px;
+        }
+
+        #sendButton {
+            padding: 12px 24px;
+            background-color: #2196f3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            font-size: 14px;
+        }
+
+        #sendButton:hover {
+            background-color: #1976d2;
+        }
+
+        #sendButton:disabled {
+            background-color: #bdbdbd;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            text-align: center;
+            margin: 10px 0;
+            color: #666;
+            font-style: italic;
+        }
+
+        .timestamp {
+            font-size: 0.8em;
+            color: #999;
+            margin-top: 4px;
+        }
+
+        /* 滚动条样式 */
+        .chat-history::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .chat-history::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        .chat-history::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        .chat-history::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .clear-button {
+            padding: 8px 16px;
+            background-color: #ff5252;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            font-size: 14px;
+        }
+        
+        .clear-button:hover {
+            background-color: #ff1744;
+        }
+        
+        .clear-button:disabled {
+            background-color: #ffcdd2;
+            cursor: not-allowed;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .nav-button {
+            padding: 8px 16px;
+            background-color: #2196f3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        
+        .nav-button:hover {
+            background-color: #1976d2;
+        }
+
+        /* 添加代码块样式 */
+        .message pre {
+            background-color: #f6f8fa;
+            padding: 16px;
+            border-radius: 6px;
+            overflow-x: auto;
+        }
+        
+        .message code {
+            font-family: monospace;
+            background-color: #f6f8fa;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        
+        /* 其他 markdown 样式 */
+        .message h1, .message h2, .message h3 {
+            margin-top: 24px;
+            margin-bottom: 16px;
+            font-weight: 600;
+            line-height: 1.25;
+        }
+        
+        .message ul, .message ol {
+            padding-left: 2em;
+        }
+        
+        .message blockquote {
+            padding: 0 1em;
+            color: #6a737d;
+            border-left: 0.25em solid #dfe2e5;
+            margin: 0;
+        }
+
+        .reference {
+            display: none;
+            position: absolute;
+            right: 20px;
+            background-color: #f9f9f9;
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 100;
+        }
+        .info-icon {
+            cursor: pointer;
+            margin-left: 5px;
+            color: #2196f3;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script type="text/javascript" src="https://webapi.amap.com/maps?v=2.0&key=5c98219ee72ff8b122e46b8167333eb9"></script>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="header">
+            <h2>AI 聊天助手</h2>
+            <div class="header-controls">
+                <div class="model-selector">
+                    <label for="modelSelect">选择模型：</label>
+                    <select id="modelSelect">
+                        <option value="llama3.2:latest">Llama 3.2</option>
+                        <option value="gemma2:2b">Gemma 2B</option>
+                    </select>
+                </div>
+                <div class="mode-selector">
+                    <label for="modeSelect">选择模式：</label>
+                    <select id="modeSelect">
+                        <option value="path_planning">路径规划</option>
+                        <option value="image_recognition">图像识别</option>
+                        <option value="video_recognition">视频识别</option>
+                    </select>
+                </div>
+                <a href="/knowledge/" class="nav-button">知识库管理</a>
+                <button onclick="clearChat()" class="nav-button">清除对话</button>
+            </div>
+        </div>
+        <div class="chat-history" id="chatHistory"></div>
+        <div class="input-container">
+            <textarea 
+                id="messageInput" 
+                placeholder="输入您的消息..."
+                rows="3"
+            ></textarea>
+            <button id="sendButton" onclick="sendMessage()">发送</button>
+        </div>
+    </div>
+
+    <script>
+        let messages = [];
+        const modelSelect = document.getElementById('modelSelect');
+        const modeSelect = document.getElementById('modeSelect');
+
+        function getTimestamp() {
+            return new Date().toLocaleTimeString();
+        }
+
+        async function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const userMessage = messageInput.value.trim();
+            const selectedModel = modelSelect.value;
+            const selectedMode = modeSelect.value;
+            
+            if (!userMessage) return;
+
+            // 禁用输入和按钮
+            messageInput.disabled = true;
+            modelSelect.disabled = true;
+            modeSelect.disabled = true;
+            document.getElementById('sendButton').disabled = true;
+
+            try {
+                // 添加用户消息到界面
+                addMessageToChat('user', userMessage);
+                messages.push({"role": "user", "content": userMessage});
+                messageInput.value = '';
+
+                // 添加加载提示
+                const loadingDiv = document.createElement('div');
+                loadingDiv.className = 'loading';
+                loadingDiv.textContent = '正在思考...';
+                document.getElementById('chatHistory').appendChild(loadingDiv);
+
+                const response = await fetch('/chat/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        messages: messages,
+                        model: selectedModel,
+                        mode: selectedMode
+                    })
+                });
+
+                // 移除加载提示
+                loadingDiv.remove();
+
+                const data = await response.json();
+                console.log('Response:', data);
+
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                if (data.message && data.message.content) {
+                    addMessageToChat('assistant', data.message.content);
+                    messages.push({
+                        "role": "assistant",
+                        "content": data.message.content
+                    });
+
+                    // 显示模式特定信息
+                    if (selectedMode === 'path_planning' && data.route_info) {
+                        const routeInfo = `起点: ${data.route_info.start_point || '未识别'}\n终点: ${data.route_info.end_point || '未识别'}`;
+                        addMessageToChat('system', routeInfo);
+                        
+                        // 如果有起终点信息,调用地图API
+                        if (data.route_info.start_point && data.route_info.end_point) {
+                            // 这里可以添加调用地图API的代码
+                        }
+                    } else if (selectedMode === 'image_recognition') {
+                        addMessageToChat('system', '图像识别结果: ...');
+                    } else if (selectedMode === 'video_recognition') {
+                        addMessageToChat('system', '视频识别结果: ...');
+                    }
+                }
+                // 在 sendMessage 函数中添加路线显示逻辑
+                if (data.route_data) {
+                    // 创建地图容器
+                    const mapDiv = document.createElement('div');
+                    mapDiv.style.width = '100%';
+                    mapDiv.style.height = '400px';
+                    mapDiv.id = 'mapContainer';
+                    
+                    // 将地图添加到消息中
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = 'message system-message';
+
+                    // 添加路线信息
+                    const routeInfoDiv = document.createElement('div');
+                    routeInfoDiv.innerHTML = `
+                        <div class="route-details" style="margin-bottom: 10px;">
+                            <p>总距离: ${(data.route_info.distance / 1000).toFixed(1)}公里</p>
+                            <p>预计用时: ${Math.ceil(data.route_info.duration / 60)}分钟</p>
+                            <p>路况: ${data.route_info.traffic_condition}</p>
+                        </div>
+                    `;
+                    messageDiv.appendChild(routeInfoDiv);
+                    messageDiv.appendChild(mapDiv);
+                    document.getElementById('chatHistory').appendChild(messageDiv);
+                    
+                    // 初始化地图
+                    const map = new AMap.Map('mapContainer', {
+                        zoom: 12
+                    });
+                    
+                    // 添加起点标记
+                    const startMarker = new AMap.Marker({
+                        position: data.route_info.route_data.route.paths[0].steps[0].polyline.split(';')[0].split(','),
+                        title: '起点',
+                        label: {
+                            content: '起点',
+                            direction: 'top'
+                        }
+                    });
+                    startMarker.setMap(map);
+                    
+                    // 添加终点标记
+                    const endSteps = data.route_info.route_data.route.paths[0].steps;
+                    const lastStep = endSteps[endSteps.length - 1];
+                    const endPoint = lastStep.polyline.split(';').pop().split(',');
+                    const endMarker = new AMap.Marker({
+                        position: endPoint,
+                        title: '终点',
+                        label: {
+                            content: '终点',
+                            direction: 'top'
+                        }
+                    });
+                    endMarker.setMap(map);
+                    
+                    // 绘制路线
+                    const path = data.route_info.route_data.route.paths[0];
+                    path.steps.forEach(step => {
+                        const polyline = new AMap.Polyline({
+                            path: step.polyline.split(';').map(point => {
+                                const [lng, lat] = point.split(',');
+                                return new AMap.LngLat(lng, lat);
+                            }),
+                            strokeColor: "#3366FF",
+                            strokeWeight: 6
+                        });
+                        polyline.setMap(map);
+                    });
+                    
+                    // 自适应显示所有点
+                    map.setFitView();
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                addMessageToChat('system', `错误: ${error.message}`);
+                 } 
+            finally {
+                // 重新启用输入和按钮
+                messageInput.disabled = false;
+                modelSelect.disabled = false;
+                modeSelect.disabled = false;
+                document.getElementById('sendButton').disabled = false;
+                messageInput.focus();
+            }
+         
+        }
+
+        function toggleReference(index) {
+            const ref = document.getElementById(`reference-${index}`);
+            if (ref.style.display === 'none' || ref.style.display === '') {
+                ref.style.display = 'block';
+            } else {
+                ref.style.display = 'none';
+            }
+        }
+
+        function addMessageToChat(role, content, references = []) {
+            const chatHistory = document.getElementById('chatHistory');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}-message`;
+            
+            // 添加消息内容
+            const contentDiv = document.createElement('div');
+            contentDiv.innerHTML = marked.parse(content);
+            messageDiv.appendChild(contentDiv);
+            
+            // 添加引用信息
+            if (references.length > 0) {
+                const infoIcon = document.createElement('span');
+                infoIcon.className = 'info-icon';
+                infoIcon.innerHTML = 'ℹ️';
+                infoIcon.onclick = () => toggleReference(references[0].index);
+                messageDiv.appendChild(infoIcon);
+
+                references.forEach((ref, idx) => {
+                    const refDiv = document.createElement('div');
+                    refDiv.id = `reference-${ref.index}`;
+                    refDiv.className = 'reference';
+                    refDiv.innerHTML = `引用自: ${ref.document}<br>内容: ${highlightSearchTerm(ref.content, content)}`;
+                    messageDiv.appendChild(refDiv);
+                });
+            }
+            
+            // 添加时间戳
+            const timestampDiv = document.createElement('div');
+            timestampDiv.className = 'timestamp';
+            timestampDiv.textContent = getTimestamp();
+            messageDiv.appendChild(timestampDiv);
+            
+            chatHistory.appendChild(messageDiv);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+
+        function highlightSearchTerm(text, searchTerm) {
+            const regex = new RegExp(`(${searchTerm})`, 'gi');
+            return text.replace(regex, '<span style="background-color: yellow;">$1</span>');
+        }
+
+        // 支按回车发送消息
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // 初始化时滚动到底部
+        document.getElementById('chatHistory').scrollTop = document.getElementById('chatHistory').scrollHeight;
+
+        function clearChat() {
+            if (confirm('确定要清除所有对话记录吗？')) {
+                // 清除消息数组
+                messages = [];
+                
+                // 清除聊天历史显示
+                const chatHistory = document.getElementById('chatHistory');
+                chatHistory.innerHTML = '';
+                
+                // 添加系统消息提示
+                addMessageToChat('system', '对话已清除');
+                
+                // 清除输入框
+                document.getElementById('messageInput').value = '';
+                
+                // 启用所有控件
+                document.getElementById('messageInput').disabled = false;
+                document.getElementById('modelSelect').disabled = false;
+                document.getElementById('sendButton').disabled = false;
+                
+                // 聚焦到输入框
+                document.getElementById('messageInput').focus();
+            }
+        }
+    </script>
+</body>
+</html> 

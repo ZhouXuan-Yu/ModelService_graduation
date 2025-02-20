@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>知识库管理</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .knowledge-list {
+            margin-bottom: 20px;
+        }
+        
+        .knowledge-item {
+            padding: 15px;
+            border: 1px solid #eee;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .input-area {
+            margin-top: 20px;
+        }
+        
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            min-height: 100px;
+        }
+        
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .add-button {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .delete-button {
+            background-color: #ff5252;
+            color: white;
+        }
+        
+        .nav-button {
+            background-color: #2196f3;
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+        }
+        
+        .file-upload {
+            margin: 20px 0;
+            padding: 20px;
+            border: 2px dashed #ddd;
+            border-radius: 5px;
+            text-align: center;
+        }
+        
+        .file-upload input[type="file"] {
+            display: none;
+        }
+        
+        .file-upload label {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #2196f3;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        .file-upload .file-info {
+            margin-top: 10px;
+            color: #666;
+        }
+        
+        .supported-formats {
+            margin-top: 5px;
+            font-size: 0.9em;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>知识库管理</h2>
+            <a href="/" class="nav-button">返回聊天</a>
+        </div>
+        
+        <!-- 文件上传区域 -->
+        <div class="file-upload">
+            <label for="fileInput">选择文件上传</label>
+            <input type="file" id="fileInput" accept=".pdf,.doc,.docx" onchange="handleFileUpload(this)">
+            <div class="file-info" id="fileInfo"></div>
+            <div class="supported-formats">支持的格式：PDF, DOC, DOCX</div>
+        </div>
+        
+        <!-- 手动输入区域 -->
+        <div class="input-area">
+            <textarea id="newKnowledge" placeholder="输入新的知识..."></textarea>
+            <button onclick="addKnowledge()" class="add-button">添加知识</button>
+        </div>
+        
+        <!-- 知识列表 -->
+        <div class="knowledge-list" id="knowledgeList">
+            <!-- 知识条目将通过JavaScript动态添加 -->
+        </div>
+    </div>
+
+    <script>
+        // 加载知识库内容
+        async function loadKnowledge() {
+            try {
+                const response = await fetch('/get-knowledge/');
+                const data = await response.json();
+                
+                const knowledgeList = document.getElementById('knowledgeList');
+                knowledgeList.innerHTML = '';
+                
+                if (data.knowledge) {
+                    data.knowledge.forEach((item, index) => {
+                        const div = document.createElement('div');
+                        div.className = 'knowledge-item';
+                        div.innerHTML = `
+                            <div>${item}</div>
+                            <button onclick="deleteKnowledge(${index})" class="delete-button">删除</button>
+                        `;
+                        knowledgeList.appendChild(div);
+                    });
+                }
+            } catch (error) {
+                console.error('加载知识库失败:', error);
+            }
+        }
+
+        // 添加新知识
+        async function addKnowledge() {
+            const textarea = document.getElementById('newKnowledge');
+            const knowledge = textarea.value.trim();
+            
+            if (!knowledge) return;
+
+            try {
+                const response = await fetch('/add-knowledge/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        texts: [knowledge]
+                    })
+                });
+
+                if (response.ok) {
+                    textarea.value = '';
+                    loadKnowledge();  // 重新加载知识库
+                } else {
+                    console.error('添加知识失败');
+                }
+            } catch (error) {
+                console.error('添加知识失败:', error);
+            }
+        }
+
+        // 删除知识
+        async function deleteKnowledge(index) {
+            try {
+                const response = await fetch('/delete-knowledge/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ index: index })
+                });
+
+                if (response.ok) {
+                    loadKnowledge();  // 重新加载知识库
+                } else {
+                    console.error('删除知识失败');
+                }
+            } catch (error) {
+                console.error('删除知识失败:', error);
+            }
+        }
+
+        // 添加文件上传处理函数
+        async function handleFileUpload(input) {
+            const file = input.files[0];
+            if (!file) return;
+            
+            const fileInfo = document.getElementById('fileInfo');
+            fileInfo.textContent = `正在处理文件：${file.name}`;
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const response = await fetch('/upload-file/', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    fileInfo.textContent = '文件处理成功！';
+                    loadKnowledge();  // 重新加载知识库
+                } else {
+                    fileInfo.textContent = `错误：${data.error}`;
+                }
+            } catch (error) {
+                fileInfo.textContent = `上传失败：${error.message}`;
+            }
+            
+            // 清除文件输入
+            input.value = '';
+        }
+        
+        // 页面加载时获取知识库内容
+        document.addEventListener('DOMContentLoaded', loadKnowledge);
+    </script>
+</body>
+</html> 

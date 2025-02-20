@@ -1,0 +1,33 @@
+年龄预测结果汇总
+==================================================
+
+图片: age1.jpg
+预测年龄段: 0-10
+置信度: 1.00
+结果图片: F:\Desktop\train\test\result\age\result_age1.jpg
+------------------------------
+图片: age2.jpg
+预测年龄段: 0-10
+置信度: 0.99
+结果图片: F:\Desktop\train\test\result\age\result_age2.jpg
+------------------------------
+图片: age3.jpg
+预测年龄段: 11-20
+置信度: 0.95
+结果图片: F:\Desktop\train\test\result\age\result_age3.jpg
+------------------------------
+图片: age4.jpg
+预测年龄段: 41-50
+置信度: 0.94
+结果图片: F:\Desktop\train\test\result\age\result_age4.jpg
+------------------------------
+图片: age5.jpg
+预测年龄段: 41-50
+置信度: 0.96
+结果图片: F:\Desktop\train\test\result\age\result_age5.jpg
+------------------------------
+图片: age6.jpg
+预测年龄段: 51-60
+置信度: 0.94
+结果图片: F:\Desktop\train\test\result\age\result_age6.jpg
+------------------------------

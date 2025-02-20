@@ -1,0 +1,35 @@
+:root {
+  /* 主题色 */
+  --el-color-primary: #00b96b;
+  --el-color-primary-light-3: #4dc88f;
+  --el-color-primary-light-5: #85d7b0;
+  --el-color-primary-light-7: #bde8d1;
+  --el-color-primary-light-9: #1a1a1a;
+  
+  /* 背景色 141414*/
+  --el-bg-color: #141414;
+  --el-bg-color-overlay: #1d1d1d;
+  
+  /* 文字颜色 */
+  --el-text-color-primary: #ffffff;
+  --el-text-color-regular: #e5eaf3;
+  --el-text-color-secondary: #a3a6ad;
+  
+  /* 边框颜色 */
+  --el-border-color: #4c4d4f;
+  --el-border-color-light: #363637;
+  --el-border-color-lighter: #2b2b2c;
+  
+  /* 阴影 */
+  --el-box-shadow-light: 0 2px 12px 0 rgba(0, 0, 0, 0.3);
+  --el-box-shadow: 0 2px 4px rgba(0, 0, 0, .3), 0 0 6px rgba(0, 0, 0, .2);
+  
+  /* 圆角 */
+  --el-border-radius-base: 4px;
+  
+  /* 过渡动画 */
+  --el-transition-duration: 0.3s;
+  --el-transition-function: ease-in-out;
+}
+
+/* 移除亮色主题相关代码 */

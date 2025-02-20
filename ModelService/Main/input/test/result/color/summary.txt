@@ -1,0 +1,23 @@
+颜色预测结果汇总
+==================================================
+
+图片: 1528.jpg
+预测颜色: black
+置信度: 0.76
+结果图片: F:\Desktop\train\test\result\color\result_1528.jpg
+------------------------------
+图片: 1653.jpg
+预测颜色: brown
+置信度: 0.76
+结果图片: F:\Desktop\train\test\result\color\result_1653.jpg
+------------------------------
+图片: 1805.jpg
+预测颜色: grey
+置信度: 0.40
+结果图片: F:\Desktop\train\test\result\color\result_1805.jpg
+------------------------------
+图片: 2894.jpg
+预测颜色: multi
+置信度: 0.67
+结果图片: F:\Desktop\train\test\result\color\result_2894.jpg
+------------------------------

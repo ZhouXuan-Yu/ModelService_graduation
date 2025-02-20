@@ -1,0 +1,23 @@
+性别预测结果汇总
+==================================================
+
+图片: 000005.jpg
+预测性别: male
+置信度: 1.00
+结果图片: F:\Desktop\train\test\result\gender\result_000005.jpg
+------------------------------
+图片: 000056.jpg
+预测性别: female
+置信度: 0.90
+结果图片: F:\Desktop\train\test\result\gender\result_000056.jpg
+------------------------------
+图片: 000063.jpg
+预测性别: male
+置信度: 1.00
+结果图片: F:\Desktop\train\test\result\gender\result_000063.jpg
+------------------------------
+图片: 000194.jpg
+预测性别: female
+置信度: 1.00
+结果图片: F:\Desktop\train\test\result\gender\result_000194.jpg
+------------------------------

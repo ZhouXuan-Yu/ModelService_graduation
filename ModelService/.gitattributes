@@ -1,0 +1,10 @@
+ModelService/Main/model/output/color_classification/checkpoint.pth filter=lfs diff=lfs merge=lfs -text
+ModelService/Main/model/z_model_use/model/deeplabv3_resnet50.pth filter=lfs diff=lfs merge=lfs -text
+ModelService/Main/model/z_model_use/model/face_detection_converted.pt filter=lfs diff=lfs merge=lfs -text
+ModelService/Main/model/output/age_estimation/checkpoint.pt filter=lfs diff=lfs merge=lfs -text
+ModelService/Main/model/output/age_estimation/weights/best.pt filter=lfs diff=lfs merge=lfs -text
+Main/model/output/color_classification/checkpoint.pth filter=lfs diff=lfs merge=lfs -text
+Main/model/z_model_use/model/deeplabv3_resnet50.pth filter=lfs diff=lfs merge=lfs -text
+Main/model/z_model_use/model/face_detection_converted.pt filter=lfs diff=lfs merge=lfs -text
+Main/model/output/age_estimation/checkpoint.pt filter=lfs diff=lfs merge=lfs -text
+Main/model/output/age_estimation/weights/best.pt filter=lfs diff=lfs merge=lfs -text

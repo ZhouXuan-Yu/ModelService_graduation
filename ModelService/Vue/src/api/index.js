@@ -1,0 +1,1 @@
+export { imageRecognitionApi } from './image-recognition' 
