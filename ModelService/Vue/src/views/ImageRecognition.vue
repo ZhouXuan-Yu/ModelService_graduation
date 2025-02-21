@@ -1,48 +1,188 @@
 <template>
   <div class="image-recognition">
     <el-container class="main-container">
-      <!-- 主要内容区域 -->
-      <section class="main-content">
-        <!-- 左侧图片上传区域 -->
-        <div class="upload-section" :class="{ 'has-image': hasImage }">
-          <div class="upload-area" @click="triggerUpload" @drop.prevent="handleDrop" @dragover.prevent>
-            <input type="file" ref="fileInput" @change="handleFileChange" accept="image/*" class="file-input" />
-            <div class="upload-placeholder" v-if="!imageUrl">
-              <el-icon class="upload-icon"><Upload /></el-icon>
-              <p>点击或拖拽图片到此处上传</p>
-              <p class="upload-tip">支持 jpg、png 格式</p>
+      <!-- 左侧图片分析区域 -->
+      <el-main class="analysis-panel">
+        <el-card class="upload-card" v-if="!hasResults">
+          <template #header>
+            <div class="card-header">
+              <span>上传图片</span>
             </div>
-            <div class="image-container" v-else>
-              <img :src="imageUrl" alt="上传的图片" ref="imageRef" @load="handleImageLoad" />
-              <!-- 人物标记框 -->
-              <div v-for="(person, index) in analysisResult.persons" 
-                   :key="index"
-                   :style="calculateBoxStyle(person.bbox)"
-                   class="person-box"
-                   :class="{ 'active': activePerson === index }"
-                   @click="handlePersonClick(index)">
+          </template>
+          <div class="upload-container">
+            <el-upload
+              class="image-uploader"
+              :show-file-list="false"
+              :before-upload="beforeUpload"
+              :http-request="customUpload"
+              accept="image/*"
+            >
+              <div class="upload-content" v-loading="loading">
+                <img v-if="imageUrl" :src="imageUrl" class="preview-image" />
+                <el-icon v-else class="upload-icon"><Plus /></el-icon>
+              </div>
+            </el-upload>
+            
+            <div class="toolbar">
+              <el-button 
+                type="primary" 
+                @click="analyzeImage"
+                :loading="loading"
+                :disabled="!imageUrl"
+                class="analyze-btn"
+              >
+                {{ loading ? '分析中...' : '开始分析' }}
+              </el-button>
+              <el-button-group v-if="hasResults">
+                <el-button @click="zoomIn">
+                  <el-icon><ZoomIn /></el-icon>
+                </el-button>
+                <el-button @click="zoomOut">
+                  <el-icon><ZoomOut /></el-icon>
+                </el-button>
+                <el-button @click="resetZoom">
+                  <el-icon><FullScreen /></el-icon>
+                </el-button>
+              </el-button-group>
+            </div>
+
+            <!-- 添加进度提示 -->
+            <el-progress 
+              v-if="loading"
+              :percentage="analysisProgress"
+              :format="progressFormat"
+              class="progress-bar"
+            />
+
+            <!-- 在上传区域添加分析模式选择 -->
+            <div class="analysis-mode-section">
+              <h3>分析模式</h3>
+              <el-radio-group v-model="analysisMode" class="mode-selector">
+                <el-radio-button label="normal">
+                  <el-tooltip content="仅使用本地模型，分析速度更快" placement="top">
+                    <span>普通分析</span>
+                  </el-tooltip>
+                </el-radio-button>
+                <el-radio-button label="enhanced">
+                  <el-tooltip content="同时使用本地模型和Qwen-VL模型，分析更全面" placement="top">
+                    <span>加强分析</span>
+                  </el-tooltip>
+                </el-radio-button>
+              </el-radio-group>
+            </div>
+          </div>
+        </el-card>
+
+        <!-- 分析结果展示 -->
+        <el-card v-if="analysisResult" class="result-card">
+          <template #header>
+            <div class="result-header">
+              <span>分析结果</span>
+              <div class="result-actions">
+                <el-button-group>
+                  <el-button @click="exportResults">
+                    <el-icon><Download /></el-icon>
+                  </el-button>
+                  <el-button @click="shareResults">
+                    <el-icon><Share /></el-icon>
+                  </el-button>
+                </el-button-group>
               </div>
             </div>
+          </template>
+          
+          <div class="result-content" ref="resultContainer">
+            <div class="result-image-container" 
+                 ref="containerRef"
+                 :style="{ transform: `scale(${zoomLevel})` }"
+                 @mousedown="startPan"
+                 @mousemove="pan"
+                 @mouseup="endPan"
+                 @mouseleave="endPan">
+              <img 
+                v-if="imageUrl"
+                ref="imageRef"
+                :src="imageUrl"
+                alt="分析结果"
+                class="result-image"
+                :style="{
+                  transform: `translate(${panX}px, ${panY}px)`,
+                  width: imageDisplaySize.width ? `${imageDisplaySize.width}px` : 'auto',
+                  height: imageDisplaySize.height ? `${imageDisplaySize.height}px` : 'auto',
+                  objectFit: 'contain'
+                }"
+                @load="onImageLoad"
+              />
+              <!-- 人物标注层 -->
+              <div class="annotations-layer"
+                   :style="{
+                     transform: `translate(${panX}px, ${panY}px)`,
+                     width: imageDisplaySize.width ? `${imageDisplaySize.width}px` : '100%',
+                     height: imageDisplaySize.height ? `${imageDisplaySize.height}px` : '100%'
+                   }">
+                <div v-for="(person, index) in analysisResult?.persons" 
+                     :key="index"
+                     class="person-annotation"
+                     :class="{ 
+                       active: activePersonId === index,
+                       'has-data': person.gender !== 'unknown' || person.age > 0 
+                     }"
+                     :style="calculateBoxStyle(person.bbox)"
+                     @click="handlePersonClick(index)">
+                  <div class="annotation-label">
+                    {{ index + 1 }}
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="result-details">
+              <h3>检测到 {{ analysisResult?.detected || 0 }} 个人物</h3>
+              <el-collapse v-model="activeNames">
+                <el-collapse-item 
+                  v-for="(person, index) in analysisResult?.persons" 
+                  :key="index"
+                  :title="'人物 ' + (index + 1)"
+                  :name="index"
+                >
+                  <div class="person-info">
+                    <el-descriptions :column="1" border>
+                      <el-descriptions-item label="年龄">
+                        {{ person.age?.toFixed(1) || '未知' }} 岁
+                        <el-tag size="small" type="info">
+                          置信度: {{ (person.age_confidence * 100).toFixed(1) }}%
+                        </el-tag>
+                      </el-descriptions-item>
+                      <el-descriptions-item label="性别">
+                        {{ translateGender(person.gender) || '未知' }}
+                        <el-tag size="small" type="info">
+                          置信度: {{ (person.gender_confidence * 100).toFixed(1) }}%
+                        </el-tag>
+                      </el-descriptions-item>
+                      <el-descriptions-item label="上衣颜色">
+                        <span :style="getColorStyle(person.upper_color)" class="color-tag">
+                          {{ translateColor(person.upper_color || '未知') }}
+                        </span>
+                        <el-tag size="small" type="info">
+                          置信度: {{ (person.upper_color_confidence * 100).toFixed(1) }}%
+                        </el-tag>
+                      </el-descriptions-item>
+                      <el-descriptions-item label="下衣颜色">
+                        <span :style="getColorStyle(person.lower_color)" class="color-tag">
+                          {{ translateColor(person.lower_color || '未知') }}
+                        </span>
+                        <el-tag size="small" type="info">
+                          置信度: {{ (person.lower_color_confidence * 100).toFixed(1) }}%
+                        </el-tag>
+                      </el-descriptions-item>
+                    </el-descriptions>
+                  </div>
+                </el-collapse-item>
+              </el-collapse>
+            </div>
           </div>
-
-          <!-- 分析模式选择 -->
-          <div class="analysis-mode">
-            <el-radio-group v-model="analysisMode" size="large">
-              <el-radio-button label="normal">普通分析</el-radio-button>
-              <el-radio-button label="enhanced">增强分析</el-radio-button>
-            </el-radio-group>
-          </div>
-        </div>
-
-        <!-- 右侧聊天区域 -->
-        <div class="chat-section" :class="{ 'has-results': hasResults }">
-          <ImageAnalysisAssistant
-            ref="assistantRef"
-            :analysis-result="analysisResult"
-            @query="handleQuery"
-          />
-        </div>
-      </section>
+        </el-card>
+      </el-main>
     </el-container>
   </div>
 </template>
@@ -869,26 +1009,39 @@ watch(chatMessages, () => {
   overflow: hidden;
 }
 
-.image-recognition::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: 
-    radial-gradient(circle at 20% 20%, rgba(0, 255, 157, 0.1) 0%, transparent 50%),
-    radial-gradient(circle at 80% 80%, rgba(0, 214, 255, 0.1) 0%, transparent 50%);
-  pointer-events: none;
-}
-
 .main-container {
   flex: 1;
   display: flex;
   flex-direction: column;
   padding: 24px;
   position: relative;
-  min-width: 0; /* 防止内容溢出 */
+  min-width: 0;
+  width: 100%; /* 确保容器占满整个宽度 */
+}
+
+.analysis-panel {
+  height: 100%;
+  width: 100%; /* 确保面板占满容器宽度 */
+  overflow-y: auto;
+  padding: 0;
+  background-color: transparent;
+}
+
+.result-card {
+  margin: 20px auto; /* 上下边距20px，左右自动居中 */
+  max-width: 1400px; /* 增加最大宽度 */
+  width: 100%;
+}
+
+.result-content {
+  display: flex;
+  width: 100%;
+  gap: 20px;
+  position: relative;
+  overflow: hidden;
+  margin: 0 auto;
+  padding: 20px;
+  justify-content: center; /* 内容居中 */
 }
 
 .upload-section {
@@ -1038,38 +1191,39 @@ watch(chatMessages, () => {
 }
 
 .progress-bar {
-  width: 300px;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
+  width: 100%;
+  height: 20px; /* 增加高度 */
+  background: rgba(13, 17, 23, 0.8);
+  border-radius: 10px; /* 圆角适应新高度 */
   overflow: hidden;
   position: relative;
+  margin: 20px 0;
+  border: 1px solid rgba(0, 255, 157, 0.2);
+  box-shadow: 0 0 10px rgba(0, 255, 157, 0.1);
 }
 
-.progress-bar::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  background: linear-gradient(90deg, #00ff9d, #00d6ff);
-  animation: progress 2s ease infinite;
-  box-shadow: 0 0 20px rgba(0, 255, 157, 0.5);
+:deep(.el-progress) {
+  width: 100%;
 }
 
-@keyframes progress {
-  0% {
-    width: 0;
-    opacity: 1;
-  }
-  50% {
-    width: 100%;
-    opacity: 0.7;
-  }
-  100% {
-    width: 0;
-    opacity: 1;
-  }
+:deep(.el-progress-bar__outer) {
+  height: 20px !important;
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border-radius: 10px;
+}
+
+:deep(.el-progress-bar__inner) {
+  height: 100% !important;
+  background: linear-gradient(90deg, #00ff9d, #00d6ff) !important;
+  border-radius: 10px;
+  transition: width 0.3s ease;
+}
+
+:deep(.el-progress__text) {
+  color: #e6edf3 !important;
+  font-size: 14px !important;
+  line-height: 20px !important;
+  padding: 0 10px;
 }
 
 .error-message {
@@ -1080,13 +1234,6 @@ watch(chatMessages, () => {
   background: rgba(255, 77, 79, 0.1);
   border-radius: 8px;
   border: 1px solid rgba(255, 77, 79, 0.2);
-}
-
-.analysis-panel {
-  height: 100%;
-  overflow-y: auto;
-  padding: 0;
-  background-color: transparent;
 }
 
 .upload-card {
@@ -1133,24 +1280,10 @@ watch(chatMessages, () => {
   width: 200px;
 }
 
-.result-card {
-  margin-top: 20px;
-}
-
 .result-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-
-.result-content {
-  display: flex;
-  width: 100%;
-  height: 100%;
-  gap: 20px;
-  position: relative;
-  overflow: hidden;
-  padding: 0 20px;
 }
 
 .result-image-container {
@@ -1351,22 +1484,8 @@ watch(chatMessages, () => {
 }
 
 /* 修改聊天区域样式 */
-.chat-section {
-  width: 400px;
-  height: 100%;
-  position: relative;
-  background: transparent;
-  border-left: 1px solid rgba(0, 255, 157, 0.1);
-  display: flex;
-  flex-direction: column;
-}
-
-.chat-section.has-results {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-/* 删除所有重复的聊天相关样式 */
+.chat-section,
+.chat-section.has-results,
 :deep(.assistant-content),
 :deep(.chat-content),
 :deep(.chat-messages),
@@ -1374,6 +1493,6 @@ watch(chatMessages, () => {
 :deep(.message.user),
 :deep(.message.assistant),
 :deep(.chat-input-container) {
-  display: none !important;
+  display: none;
 }
 </style> 
