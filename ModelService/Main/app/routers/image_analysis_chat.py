@@ -49,10 +49,8 @@ class ImageAnalysisRequest(BaseModel):
 
 def build_system_message(context: ImageAnalysisContext) -> str:
     """构建包含分析数据的系统消息"""
-    # 从 currentAnalysis 中获取 persons 数据
     persons = context.currentAnalysis.persons
     
-    # 构建人物信息字符串
     people_info = []
     for i, person in enumerate(persons, 1):
         info = f"""### 人物{i}

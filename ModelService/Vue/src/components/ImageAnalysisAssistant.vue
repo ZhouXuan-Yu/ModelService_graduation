@@ -153,6 +153,8 @@ const sendMessage = async () => {
       throw new Error('当前没有可用的图片分析结果')
     }
 
+    console.log('发送聊天请求，当前分析结果:', currentAnalysis)
+
     // 发送到本地大模型
     const response = await imageAnalysisChatApi.sendMessage(message, currentAnalysis)
     
